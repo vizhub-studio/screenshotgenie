@@ -1,4 +1,5 @@
 import { writeFile } from "fs/promises";
+import JSZip from "jszip";
 import type {
   ImageGenerationInputs,
   ImageKey,
@@ -24,11 +25,13 @@ export type {
 export class ScreenshotGenie {
   private apiKey: string | undefined;
   private host: string;
+  private useZipUpload: boolean;
 
   constructor(config: ScreenshotGenieConfig = {}) {
     const {
       apiKey = process.env.SCREENSHOT_GENIE_API_KEY,
       host = "https://screenshotgenie.com",
+      useZipUpload = false,
     } = config;
     // Check for API key in options first, then environment variable
     const providedApiKey = apiKey || process.env.SCREENSHOT_GENIE_API_KEY;
@@ -42,6 +45,7 @@ export class ScreenshotGenie {
 
     this.apiKey = providedApiKey;
     this.host = host;
+    this.useZipUpload = useZipUpload;
   }
 
   async createImageKey(
@@ -50,6 +54,23 @@ export class ScreenshotGenie {
     if (!imageGenerationInputs.browserZoom) {
       imageGenerationInputs.browserZoom = 1.0;
     }
+
+    // Use ZIP upload if enabled and HTML is provided
+    if (this.useZipUpload && imageGenerationInputs.html) {
+      return this.createImageKeyWithZip(imageGenerationInputs);
+    }
+
+    // Otherwise use traditional JSON POST
+    return this.createImageKeyWithJson(imageGenerationInputs);
+  }
+
+  /**
+   * Create image key using traditional JSON POST
+   * (Existing behavior)
+   */
+  private async createImageKeyWithJson(
+    imageGenerationInputs: ImageGenerationInputs
+  ): Promise<ImageKey> {
     const response = await fetch(`${this.host}/api/create-image-key`, {
       method: "POST",
       headers: {
@@ -73,6 +94,73 @@ export class ScreenshotGenie {
     }
 
     console.log("json", json);
+    return json.imageKey;
+  }
+
+  /**
+   * Create image key using ZIP file upload
+   * Compresses HTML and uploads as multipart/form-data
+   */
+  private async createImageKeyWithZip(
+    imageGenerationInputs: ImageGenerationInputs
+  ): Promise<ImageKey> {
+    if (!imageGenerationInputs.html) {
+      throw new Error("HTML content is required for ZIP upload");
+    }
+
+    console.log(
+      `[ScreenshotGenie] Creating ZIP file for HTML (${imageGenerationInputs.html.length} bytes)...`
+    );
+
+    // Create ZIP file containing the HTML
+    const zip = new JSZip();
+    zip.file("index.html", imageGenerationInputs.html);
+
+    // Generate the ZIP blob
+    const zipBlob = await zip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 9 }, // Maximum compression
+    });
+
+    console.log(
+      `[ScreenshotGenie] ZIP file created (${zipBlob.size} bytes, ${Math.round((zipBlob.size / imageGenerationInputs.html.length) * 100)}% of original)`
+    );
+
+    // Create FormData for multipart upload
+    const formData = new FormData();
+    formData.append("file", zipBlob, "visualization.zip");
+    formData.append("width", imageGenerationInputs.width.toString());
+    formData.append("height", imageGenerationInputs.height.toString());
+    formData.append(
+      "browserZoom",
+      (imageGenerationInputs.browserZoom || 1.0).toString()
+    );
+
+    // Upload to server
+    const response = await fetch(`${this.host}/api/create-image-key`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        // Don't set Content-Type - let the browser set it with boundary
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to create image key (ZIP upload). Status: ${response.status}, Body: ${errorText}`
+      );
+    }
+
+    const json = await response.json();
+
+    if (json.ok === false) {
+      throw new Error(json.body);
+    }
+
+    console.log("[ScreenshotGenie] Image key created successfully via ZIP upload");
     return json.imageKey;
   }
 

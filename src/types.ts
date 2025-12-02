@@ -5,6 +5,12 @@ export type ScreenshotGenieConfig = {
 
   // Optional API host override
   host?: string;
+
+  // Use ZIP file upload for large HTML content
+  // When true, HTML will be compressed and uploaded as a ZIP file
+  // This solves the "413 Request Too Long" error for large visualizations
+  // Requires server support for multipart/form-data and ZIP extraction
+  useZipUpload?: boolean;
 };
 
 // A unique identifier for an image

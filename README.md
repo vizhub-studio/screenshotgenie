@@ -9,7 +9,8 @@ A Node.js client library for [Screenshot Genie](https://screenshotgenie.com/) - 
 💾 Download images directly to files  
 🚀 Modern, Promise-based API  
 📝 Full TypeScript support  
-🔒 Secure authentication via API keys 
+🔒 Secure authentication via API keys  
+📦 ZIP compression for large HTML content (avoids 413 errors) 
 
 ## Installation
 
@@ -55,8 +56,9 @@ await genie.downloadImage(imageUrl, "thumbnail.png");
 
 ```typescript
 interface ScreenshotGenieOptions {
-  apiKey: string;    // Your Screenshot Genie API key
-  host?: string;     // Optional API host override
+  apiKey: string;         // Your Screenshot Genie API key
+  host?: string;          // Optional API host override
+  useZipUpload?: boolean; // Use ZIP compression for large HTML (default: false)
 }
 
 const genie = new ScreenshotGenie(options);
@@ -136,6 +138,26 @@ const { imageKey } = await genie.createImageKey({
 const thumbUrl = genie.getImageUrl(imageKey, 400);
 ```
 
+## Handling Large HTML Content
+
+For large visualizations that exceed request size limits (413 errors), enable ZIP compression:
+
+```javascript
+const genie = new ScreenshotGenie({
+  apiKey: process.env.SCREENSHOT_GENIE_API_KEY,
+  useZipUpload: true  // Compress HTML before uploading
+});
+
+// Large HTML will now be compressed (typically 70-90% size reduction)
+const { imageKey } = await genie.createImageKey({
+  html: largeHtmlContent,  // Can be several MB
+  width: 800,
+  height: 600
+});
+```
+
+**Note**: ZIP upload requires server support. See `SERVER_UPDATE_PLAN.md` for implementation details.
+
 ## Best Practices
 
 - Store your API key securely (e.g., environment variables)
@@ -143,6 +165,7 @@ const thumbUrl = genie.getImageUrl(imageKey, 400);
 - Image keys expire after 30 days
 - Handle errors appropriately in production code
 - Consider implementing retry logic for image requests
+- Enable `useZipUpload` for visualizations that generate large HTML (>500KB)
 
 ## Error Handling
 

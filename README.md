@@ -2,6 +2,18 @@
 
 A Node.js client library for [Screenshot Genie](https://screenshotgenie.com/) - a simple way to generate, resize, and host screenshots programmatically.
 
+## Development and credential handling
+
+The client uses the remote Screenshot Genie service; running the examples requires authorized API access. The library's entry points are [`src/index.ts`](src/index.ts) and [`src/types.ts`](src/types.ts), with examples/tests under [`test/`](test/).
+
+```bash
+npm ci
+npm run build
+npm test -- --run
+```
+
+`npm test` by itself invokes Vitest without `run` and may enter interactive/watch mode. Keep your API key in the process environment, not in browser bundles, screenshots, source files, or logs. Review any submitted HTML/URLs for confidential content before sending them to the remote capture service.
+
 ## Features
 
 ✨ Generate screenshots from HTML or URLs  
@@ -44,8 +56,7 @@ const { imageKey } = await genie.createImageKey({
 // Get a thumbnail URL
 const imageUrl = genie.getImageUrl(imageKey, 400);
 
-// Get image URL and download
-const imageUrl = genie.getImageUrl(imageKey, 400);
+// Download the generated image
 await genie.downloadImage(imageUrl, "thumbnail.png");
 ```
 
